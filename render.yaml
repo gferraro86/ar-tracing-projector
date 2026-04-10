@@ -1,6 +1,5 @@
 services:
   - type: web
-    plan: free
     name: ar-tracing-projector
     runtime: static
     buildCommand: npm install && npm run build
