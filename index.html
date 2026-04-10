@@ -32,7 +32,7 @@
   </div>
 
   <!-- AR DOM Overlay (shown inside WebXR session) -->
-  <div id="ar-overlay" class="hidden">
+  <div id="ar-overlay" class="hidden" onbeforexrselect="event.preventDefault()">
     <!-- Point picking phase -->
     <div id="ar-picking-ui">
       <p id="picking-instructions" class="ar-instructions">
