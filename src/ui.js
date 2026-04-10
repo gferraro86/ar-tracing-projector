@@ -8,19 +8,26 @@ export function setupTracingUI(opacitySlider, opacityValue) {
   });
 }
 
-export function showScreen(screenId) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  const screen = document.getElementById(screenId);
-  if (screen) screen.classList.add('active');
-}
-
 export function showPickingUI() {
   document.getElementById('ar-picking-ui').classList.remove('hidden');
+  document.getElementById('ar-confirm-ui').classList.add('hidden');
   document.getElementById('ar-tracing-ui').classList.add('hidden');
+}
+
+export function showConfirmUI() {
+  document.getElementById('ar-picking-ui').classList.add('hidden');
+  document.getElementById('ar-confirm-ui').classList.remove('hidden');
+  document.getElementById('ar-tracing-ui').classList.add('hidden');
+  document.getElementById('lock-status').classList.add('hidden');
+}
+
+export function showLockingStatus() {
+  document.getElementById('lock-status').classList.remove('hidden');
 }
 
 export function showTracingUI() {
   document.getElementById('ar-picking-ui').classList.add('hidden');
+  document.getElementById('ar-confirm-ui').classList.add('hidden');
   document.getElementById('ar-tracing-ui').classList.remove('hidden');
 }
 

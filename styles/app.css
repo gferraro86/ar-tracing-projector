@@ -160,6 +160,34 @@ body {
   transform: translateX(-50%);
 }
 
+/* Confirm UI */
+.confirm-buttons {
+  position: absolute;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+}
+
+.btn-confirm {
+  background: rgba(40, 180, 80, 0.8) !important;
+  font-weight: bold;
+}
+
+.lock-status {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: #ffd700;
+  pointer-events: none;
+}
+
 /* Tracing UI */
 .opacity-control {
   position: absolute;

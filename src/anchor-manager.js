@@ -4,38 +4,42 @@ import { createOverlayMesh, disposeOverlay } from './overlay-mesh.js';
 let anchor = null;
 let overlayGroup = null;
 let scene = null;
+let locked = false;
+
+// Smoothing state
+const smoothPosition = new THREE.Vector3();
+const smoothQuaternion = new THREE.Quaternion();
+let hasInitialPose = false;
+const SMOOTH_FACTOR = 0.15; // lower = smoother but slower to converge
+
+// Lock averaging state
+let lockSamples = [];
+const LOCK_SAMPLE_COUNT = 20; // frames to average before locking
+let onLockReady = null;
 
 export function initAnchorManager(sceneRef) {
   scene = sceneRef;
   overlayGroup = new THREE.Group();
   overlayGroup.matrixAutoUpdate = false;
   scene.add(overlayGroup);
+  locked = false;
+  hasInitialPose = false;
+  lockSamples = [];
+  onLockReady = null;
 }
 
-/**
- * Create an anchor at the centroid of the 4 points and attach the overlay mesh.
- *
- * frame: XRFrame
- * points: array of 4 THREE.Vector3 (world-space positions on the surface)
- * referenceSpace: XRReferenceSpace
- * texture: THREE.Texture
- */
 export async function anchorOverlay(frame, points, referenceSpace, texture) {
-  // Compute centroid
   const centroid = new THREE.Vector3();
   for (const p of points) centroid.add(p);
   centroid.divideScalar(4);
 
-  // Convert points to anchor-local coordinates
   const localPoints = points.map(p => p.clone().sub(centroid));
 
-  // Create overlay mesh
   const mesh = createOverlayMesh(texture, localPoints);
   if (!mesh) return false;
 
   overlayGroup.add(mesh);
 
-  // Try to create an XR anchor
   if (frame.createAnchor) {
     try {
       const anchorPose = new XRRigidTransform(
@@ -49,7 +53,6 @@ export async function anchorOverlay(frame, points, referenceSpace, texture) {
     }
   }
 
-  // If no anchor API available, set static position
   if (!anchor) {
     overlayGroup.matrixAutoUpdate = true;
     overlayGroup.position.copy(centroid);
@@ -58,34 +61,113 @@ export async function anchorOverlay(frame, points, referenceSpace, texture) {
     overlayGroup.matrixAutoUpdate = false;
   }
 
+  locked = false;
+  hasInitialPose = false;
   return true;
 }
 
 /**
- * Update anchor pose each frame. Call from render loop.
+ * Update anchor pose each frame with EMA smoothing.
+ * When locked, stops updating (image stays perfectly still in world space,
+ * but camera still moves freely so user sees different parts when moving).
  */
 export function updateAnchor(frame, referenceSpace) {
-  if (!anchor || !frame.trackedAnchors) return;
+  if (locked || !anchor || !frame.trackedAnchors) return;
 
   for (const trackedAnchor of frame.trackedAnchors) {
     if (trackedAnchor === anchor) {
       const pose = frame.getPose(trackedAnchor.anchorSpace, referenceSpace);
-      if (pose) {
-        overlayGroup.matrix.fromArray(pose.transform.matrix);
-        overlayGroup.matrixWorldNeedsUpdate = true;
+      if (!pose) break;
+
+      const m = pose.transform.matrix;
+      const newPos = new THREE.Vector3(m[12], m[13], m[14]);
+      const newQuat = new THREE.Quaternion(
+        pose.transform.orientation.x,
+        pose.transform.orientation.y,
+        pose.transform.orientation.z,
+        pose.transform.orientation.w
+      );
+
+      if (!hasInitialPose) {
+        smoothPosition.copy(newPos);
+        smoothQuaternion.copy(newQuat);
+        hasInitialPose = true;
+      } else {
+        smoothPosition.lerp(newPos, SMOOTH_FACTOR);
+        smoothQuaternion.slerp(newQuat, SMOOTH_FACTOR);
       }
+
+      // Apply smoothed pose
+      const mat = new THREE.Matrix4();
+      mat.compose(smoothPosition, smoothQuaternion, new THREE.Vector3(1, 1, 1));
+      overlayGroup.matrix.copy(mat);
+      overlayGroup.matrixWorldNeedsUpdate = true;
+
+      // Collect samples for lock averaging
+      if (lockSamples !== null && lockSamples.length < LOCK_SAMPLE_COUNT) {
+        lockSamples.push({ pos: newPos.clone(), quat: newQuat.clone() });
+
+        if (lockSamples.length >= LOCK_SAMPLE_COUNT && onLockReady) {
+          onLockReady();
+          onLockReady = null;
+        }
+      }
+
       break;
     }
   }
 }
 
-export function resetAnchor() {
-  if (anchor && anchor.delete) {
-    anchor.delete();
-  }
-  anchor = null;
+/**
+ * Collect N frames of pose data, average them, and lock the position.
+ * The image stays fixed in 3D world space — the camera still moves freely.
+ */
+export function confirmAndLock(callback) {
+  lockSamples = [];
 
-  // Remove overlay mesh from group
+  onLockReady = () => {
+    // Average position
+    const avgPos = new THREE.Vector3();
+    for (const s of lockSamples) avgPos.add(s.pos);
+    avgPos.divideScalar(lockSamples.length);
+
+    // Average quaternion (incremental slerp)
+    const avgQuat = new THREE.Quaternion().copy(lockSamples[0].quat);
+    for (let i = 1; i < lockSamples.length; i++) {
+      avgQuat.slerp(lockSamples[i].quat, 1 / (i + 1));
+    }
+
+    // Apply and lock
+    const mat = new THREE.Matrix4();
+    mat.compose(avgPos, avgQuat, new THREE.Vector3(1, 1, 1));
+    overlayGroup.matrix.copy(mat);
+    overlayGroup.matrixWorldNeedsUpdate = true;
+
+    locked = true;
+    lockSamples = [];
+    if (callback) callback();
+  };
+}
+
+export function isLocked() {
+  return locked;
+}
+
+export function unlock() {
+  locked = false;
+  hasInitialPose = false;
+  lockSamples = [];
+  onLockReady = null;
+}
+
+export function resetAnchor() {
+  if (anchor && anchor.delete) anchor.delete();
+  anchor = null;
+  locked = false;
+  hasInitialPose = false;
+  lockSamples = [];
+  onLockReady = null;
+
   while (overlayGroup.children.length > 0) {
     overlayGroup.remove(overlayGroup.children[0]);
   }
@@ -94,9 +176,7 @@ export function resetAnchor() {
 
 export function dispose() {
   resetAnchor();
-  if (overlayGroup && scene) {
-    scene.remove(overlayGroup);
-  }
+  if (overlayGroup && scene) scene.remove(overlayGroup);
   overlayGroup = null;
   scene = null;
 }

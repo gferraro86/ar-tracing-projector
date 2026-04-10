@@ -9,9 +9,17 @@ import {
   getReferenceSpace,
 } from './ar-session.js';
 import { initPointPicker, handleSelect, undoLastPoint, reset as resetPoints } from './point-picker.js';
-import { anchorOverlay, resetAnchor } from './anchor-manager.js';
+import { anchorOverlay, resetAnchor, confirmAndLock } from './anchor-manager.js';
 import { hideReticle } from './hit-test.js';
-import { setupTracingUI, showPickingUI, showTracingUI, showOverlay, hideOverlay } from './ui.js';
+import {
+  setupTracingUI,
+  showPickingUI,
+  showConfirmUI,
+  showLockingStatus,
+  showTracingUI,
+  showOverlay,
+  hideOverlay,
+} from './ui.js';
 
 // DOM elements
 const fileInput = document.getElementById('image-input');
@@ -24,6 +32,8 @@ const pointCounter = document.getElementById('point-counter');
 const btnUndoPoint = document.getElementById('btn-undo-point');
 const opacitySlider = document.getElementById('opacity-slider');
 const opacityValue = document.getElementById('opacity-value');
+const btnConfirm = document.getElementById('btn-confirm');
+const btnRedo = document.getElementById('btn-redo');
 const btnReset = document.getElementById('btn-reset');
 const btnExit = document.getElementById('btn-exit');
 
@@ -43,6 +53,8 @@ async function init() {
 
   btnStartAR.addEventListener('click', onStartAR);
   btnUndoPoint.addEventListener('click', () => undoLastPoint());
+  btnConfirm.addEventListener('click', onConfirm);
+  btnRedo.addEventListener('click', onReset);
   btnReset.addEventListener('click', onReset);
   btnExit.addEventListener('click', onExit);
 }
@@ -77,7 +89,7 @@ function onPointsComplete(points) {
   pendingAnchorPoints = points;
   setOnSelect(null);
 
-  // Create the anchor in the next render frame (we need a valid XRFrame)
+  // Create the overlay in the next render frame
   setOnFrame(async (timestamp, frame) => {
     if (!pendingAnchorPoints) return;
 
@@ -87,15 +99,24 @@ function onPointsComplete(points) {
     const texture = getTexture();
     const success = await anchorOverlay(frame, pts, getReferenceSpace(), texture);
 
-    // Clear the callback only after anchor creation is done
     setOnFrame(null);
 
     if (success) {
-      showTracingUI();
+      // Show confirm UI — image is visible but not locked yet
+      showConfirmUI();
     } else {
       console.error('Failed to create anchor overlay');
       onReset();
     }
+  });
+}
+
+function onConfirm() {
+  showLockingStatus();
+
+  // Collect 20 frames of pose data, average, and lock
+  confirmAndLock(() => {
+    showTracingUI();
   });
 }
 
