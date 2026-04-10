@@ -78,22 +78,24 @@ function onPointsComplete(points) {
   setOnSelect(null);
 
   // Create the anchor in the next render frame (we need a valid XRFrame)
-  setOnFrame((timestamp, frame) => {
+  setOnFrame(async (timestamp, frame) => {
     if (!pendingAnchorPoints) return;
 
     const pts = pendingAnchorPoints;
     pendingAnchorPoints = null;
-    setOnFrame(null);
 
     const texture = getTexture();
-    anchorOverlay(frame, pts, getReferenceSpace(), texture).then((success) => {
-      if (success) {
-        showTracingUI();
-      } else {
-        console.error('Failed to create anchor overlay');
-        onReset();
-      }
-    });
+    const success = await anchorOverlay(frame, pts, getReferenceSpace(), texture);
+
+    // Clear the callback only after anchor creation is done
+    setOnFrame(null);
+
+    if (success) {
+      showTracingUI();
+    } else {
+      console.error('Failed to create anchor overlay');
+      onReset();
+    }
   });
 }
 

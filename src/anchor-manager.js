@@ -51,9 +51,10 @@ export async function anchorOverlay(frame, points, referenceSpace, texture) {
 
   // If no anchor API available, set static position
   if (!anchor) {
-    overlayGroup.position.copy(centroid);
     overlayGroup.matrixAutoUpdate = true;
+    overlayGroup.position.copy(centroid);
     overlayGroup.updateMatrix();
+    overlayGroup.matrixWorldNeedsUpdate = true;
     overlayGroup.matrixAutoUpdate = false;
   }
 
@@ -71,6 +72,7 @@ export function updateAnchor(frame, referenceSpace) {
       const pose = frame.getPose(trackedAnchor.anchorSpace, referenceSpace);
       if (pose) {
         overlayGroup.matrix.fromArray(pose.transform.matrix);
+        overlayGroup.matrixWorldNeedsUpdate = true;
       }
       break;
     }

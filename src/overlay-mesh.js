@@ -60,7 +60,7 @@ export function createOverlayMesh(texture, corners) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
+  geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(indices), 1));
   geometry.computeVertexNormals();
 
   material = new THREE.MeshBasicMaterial({
