@@ -27,8 +27,7 @@ const opacityValue = document.getElementById('opacity-value');
 const btnReset = document.getElementById('btn-reset');
 const btnExit = document.getElementById('btn-exit');
 
-let pendingAnchorPoints = null;
-let pendingHitResult = null;
+let cornerPoints = null;
 
 async function init() {
   setupImageLoader(fileInput, previewImg, previewContainer, btnStartAR);
@@ -59,7 +58,16 @@ async function onStartAR() {
 
     await startARSession(arOverlay);
 
-    initPointPicker(getScene(), pointCounter, btnUndoPoint, onPointsComplete);
+    // Init point picker with two callbacks:
+    // 1. onCornersComplete: called after 4 corner taps (shows "tap center" instruction)
+    // 2. onCenterComplete: called after 5th tap at center
+    initPointPicker(
+      getScene(),
+      pointCounter,
+      btnUndoPoint,
+      onCornersComplete,
+      onCenterComplete
+    );
 
     setOnSelect(() => {
       handleSelect(getReferenceSpace());
@@ -73,24 +81,29 @@ async function onStartAR() {
   }
 }
 
-function onPointsComplete(points) {
+function onCornersComplete(points) {
+  // Store corners, wait for center tap
+  cornerPoints = points;
+}
+
+function onCenterComplete(centerPoint) {
   hideReticle();
-  pendingAnchorPoints = points;
-  // Capture the current hit test result for stable anchor creation
-  pendingHitResult = getLastHitResult();
   setOnSelect(null);
+
+  // Capture the hit test result at the center point
+  const hitResult = getLastHitResult();
 
   // Create the anchor in the next render frame
   setOnFrame(async (timestamp, frame) => {
-    if (!pendingAnchorPoints) return;
-
-    const pts = pendingAnchorPoints;
-    const hitResult = pendingHitResult;
-    pendingAnchorPoints = null;
-    pendingHitResult = null;
-
     const texture = getTexture();
-    const success = await anchorOverlay(hitResult, frame, pts, getReferenceSpace(), texture);
+    const success = await anchorOverlay(
+      hitResult,
+      frame,
+      cornerPoints,
+      centerPoint,
+      getReferenceSpace(),
+      texture
+    );
 
     setOnFrame(null);
 
@@ -104,11 +117,18 @@ function onPointsComplete(points) {
 }
 
 function onReset() {
+  cornerPoints = null;
   resetPoints();
   resetAnchor();
   showPickingUI();
 
-  initPointPicker(getScene(), pointCounter, btnUndoPoint, onPointsComplete);
+  initPointPicker(
+    getScene(),
+    pointCounter,
+    btnUndoPoint,
+    onCornersComplete,
+    onCenterComplete
+  );
   setOnSelect(() => {
     handleSelect(getReferenceSpace());
   });

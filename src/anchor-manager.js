@@ -13,31 +13,28 @@ export function initAnchorManager(sceneRef) {
 }
 
 /**
- * Create an anchor from a hit test result and attach the overlay mesh.
- * Hit test anchors are attached to real surface feature points tracked by ARCore,
- * making them much more stable than frame.createAnchor().
+ * Create an anchor at the center point (from hit test) and attach the overlay mesh.
+ * The center is where the user tapped (5th tap), and the anchor is created from
+ * the hit test result at that exact spot — attached to real surface features.
  *
- * hitTestResult: XRHitTestResult from the last hit test
- * points: array of 4 THREE.Vector3 (world-space positions on the surface)
+ * hitTestResult: XRHitTestResult from the center tap
+ * frame: XRFrame
+ * cornerPoints: array of 4 THREE.Vector3 (world-space corner positions)
+ * centerPoint: THREE.Vector3 (world-space center position from 5th tap)
  * referenceSpace: XRReferenceSpace
  * texture: THREE.Texture
  */
-export async function anchorOverlay(hitTestResult, frame, points, referenceSpace, texture) {
-  // Compute centroid
-  const centroid = new THREE.Vector3();
-  for (const p of points) centroid.add(p);
-  centroid.divideScalar(4);
+export async function anchorOverlay(hitTestResult, frame, cornerPoints, centerPoint, referenceSpace, texture) {
+  // Convert corner points to center-relative local coordinates
+  const localPoints = cornerPoints.map(p => p.clone().sub(centerPoint));
 
-  // Convert points to anchor-local coordinates
-  const localPoints = points.map(p => p.clone().sub(centroid));
-
-  // Create overlay mesh
+  // Create overlay mesh with corners relative to anchor origin
   const mesh = createOverlayMesh(texture, localPoints);
   if (!mesh) return false;
 
   overlayGroup.add(mesh);
 
-  // Try to create anchor from hit test result (most stable — attached to surface features)
+  // Create anchor from hit test result (most stable — attached to surface features)
   let anchorCreated = false;
   if (hitTestResult && hitTestResult.createAnchor) {
     try {
@@ -48,11 +45,11 @@ export async function anchorOverlay(hitTestResult, frame, points, referenceSpace
     }
   }
 
-  // Fallback: create anchor from frame (less stable but still works)
+  // Fallback: create anchor from frame at center position
   if (!anchorCreated && frame.createAnchor) {
     try {
       const anchorPose = new XRRigidTransform(
-        { x: centroid.x, y: centroid.y, z: centroid.z, w: 1 },
+        { x: centerPoint.x, y: centerPoint.y, z: centerPoint.z, w: 1 },
         { x: 0, y: 0, z: 0, w: 1 }
       );
       anchor = await frame.createAnchor(anchorPose, referenceSpace);
@@ -62,10 +59,10 @@ export async function anchorOverlay(hitTestResult, frame, points, referenceSpace
     }
   }
 
-  // Last resort: static position (no anchor tracking at all)
+  // Last resort: static position
   if (!anchorCreated) {
     overlayGroup.matrixAutoUpdate = true;
-    overlayGroup.position.copy(centroid);
+    overlayGroup.position.copy(centerPoint);
     overlayGroup.updateMatrix();
     overlayGroup.matrixWorldNeedsUpdate = true;
     overlayGroup.matrixAutoUpdate = false;
@@ -75,8 +72,7 @@ export async function anchorOverlay(hitTestResult, frame, points, referenceSpace
 }
 
 /**
- * Update anchor pose each frame. The hit-test-based anchor is tracked by ARCore
- * against real surface features, so it should be very stable.
+ * Update anchor pose each frame.
  */
 export function updateAnchor(frame, referenceSpace) {
   if (!anchor || !frame.trackedAnchors) return;
