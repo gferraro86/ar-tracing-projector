@@ -6,6 +6,14 @@
   <meta name="theme-color" content="#1a1a2e">
   <title>AR Tracing Projector</title>
   <link rel="stylesheet" href="/styles/app.css">
+  <script>
+    // Force service worker update on each deploy
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(r => r.update());
+      });
+    }
+  </script>
 </head>
 <body>
   <!-- Screen 1: Image Picker -->
