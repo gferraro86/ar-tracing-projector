@@ -1,0 +1,14 @@
+services:
+  - type: web
+    plan: free
+    name: ar-tracing-projector
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Permissions-Policy
+        value: camera=*, xr-spatial-tracking=*

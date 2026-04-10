@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>AR Tracing Projector</title>
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body>
+  <!-- Screen 1: Image Picker -->
+  <div id="screen-picker" class="screen active">
+    <div class="picker-container">
+      <h1>AR Tracing Projector</h1>
+      <p class="subtitle">Proietta immagini su superfici reali</p>
+
+      <div id="image-preview" class="preview hidden">
+        <img id="preview-img" alt="Anteprima">
+      </div>
+
+      <label class="btn btn-secondary" for="image-input">
+        Scegli Immagine
+      </label>
+      <input type="file" id="image-input" accept="image/*" hidden>
+
+      <button id="btn-start-ar" class="btn btn-primary" disabled>
+        Avvia AR
+      </button>
+
+      <p id="ar-error" class="error hidden"></p>
+    </div>
+  </div>
+
+  <!-- AR DOM Overlay (shown inside WebXR session) -->
+  <div id="ar-overlay" class="hidden">
+    <!-- Point picking phase -->
+    <div id="ar-picking-ui">
+      <p id="picking-instructions" class="ar-instructions">
+        Tocca i 4 angoli della superficie (senso orario da in alto a sinistra)
+      </p>
+      <div id="point-counter" class="point-counter">0 / 4</div>
+      <button id="btn-undo-point" class="btn btn-small" disabled>Annulla ultimo</button>
+    </div>
+
+    <!-- Tracing phase -->
+    <div id="ar-tracing-ui" class="hidden">
+      <div class="opacity-control">
+        <label for="opacity-slider">Opacit&agrave;</label>
+        <input type="range" id="opacity-slider" min="0" max="100" value="40">
+        <span id="opacity-value">40%</span>
+      </div>
+      <div class="tracing-buttons">
+        <button id="btn-reset" class="btn btn-small">Reset</button>
+        <button id="btn-exit" class="btn btn-small btn-danger">Esci</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
