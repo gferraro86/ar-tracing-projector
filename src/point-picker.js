@@ -1,6 +1,15 @@
 import * as THREE from 'three';
 import { getLastHitPose } from './hit-test.js';
 
+const CORNER_LABELS = [
+  'TOP-LEFT',
+  'TOP-RIGHT',
+  'BOTTOM-RIGHT',
+  'BOTTOM-LEFT',
+];
+
+const CORNER_COLORS = [0x4361ee, 0x43ee61, 0xee4361, 0xeeee43];
+
 const points = [];
 const markers = [];
 
@@ -8,11 +17,13 @@ let onComplete = null;
 let scene = null;
 let counterEl = null;
 let undoBtn = null;
+let instructionsEl = null;
 
 export function initPointPicker(sceneRef, counterElement, undoButton, completeCb) {
   scene = sceneRef;
   counterEl = counterElement;
   undoBtn = undoButton;
+  instructionsEl = document.getElementById('picking-instructions');
   onComplete = completeCb;
   points.length = 0;
   markers.length = 0;
@@ -32,7 +43,7 @@ export function handleSelect(referenceSpace) {
   );
 
   points.push(pos);
-  addMarker(pos, points.length);
+  addMarker(pos, points.length - 1);
   updateUI();
 
   if (points.length === 4) {
@@ -42,28 +53,26 @@ export function handleSelect(referenceSpace) {
 
 function addMarker(position, index) {
   const geo = new THREE.SphereGeometry(0.015, 16, 16);
-  const mat = new THREE.MeshBasicMaterial({
-    color: index <= 2 ? 0x4361ee : 0xee4363,
-  });
+  const mat = new THREE.MeshBasicMaterial({ color: CORNER_COLORS[index] });
   const sphere = new THREE.Mesh(geo, mat);
   sphere.position.copy(position);
   scene.add(sphere);
   markers.push(sphere);
 
-  // Add line between consecutive points
-  if (markers.length > 1) {
+  // Line to previous point
+  if (points.length > 1) {
     const prev = points[points.length - 2];
     const lineGeo = new THREE.BufferGeometry().setFromPoints([prev, position]);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x4361ee, linewidth: 2 });
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff });
     const line = new THREE.Line(lineGeo, lineMat);
     scene.add(line);
-    markers.push(line); // store for cleanup
+    markers.push(line);
   }
 
-  // Close the loop after 4th point
+  // Close loop after 4th point
   if (points.length === 4) {
     const lineGeo = new THREE.BufferGeometry().setFromPoints([position, points[0]]);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x4361ee, linewidth: 2 });
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff });
     const line = new THREE.Line(lineGeo, lineMat);
     scene.add(line);
     markers.push(line);
@@ -80,7 +89,7 @@ export function undoLastPoint() {
   sphere.geometry.dispose();
   sphere.material.dispose();
 
-  // Remove connecting line (if any)
+  // Remove connecting line (if any, always present after first point)
   if (markers.length > 0 && markers[markers.length - 1] instanceof THREE.Line) {
     const line = markers.pop();
     scene.remove(line);
@@ -94,6 +103,16 @@ export function undoLastPoint() {
 function updateUI() {
   if (counterEl) counterEl.textContent = `${points.length} / 4`;
   if (undoBtn) undoBtn.disabled = points.length === 0;
+
+  // Update instructions to show which corner to place next
+  if (instructionsEl) {
+    if (points.length < 4) {
+      const nextLabel = CORNER_LABELS[points.length];
+      instructionsEl.textContent = `Tocca il punto: ${nextLabel}`;
+    } else {
+      instructionsEl.textContent = 'Immagine posizionata!';
+    }
+  }
 }
 
 export function reset() {

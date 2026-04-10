@@ -1,84 +1,75 @@
 import * as THREE from 'three';
-import { computeHomography } from './homography.js';
-
-const vertexShader = `
-  uniform mat3 uHomography;
-  varying vec2 vUv;
-
-  void main() {
-    vUv = uv;
-
-    // Apply homography to UV coordinates to get surface position
-    vec3 srcPos = vec3(uv, 1.0);
-    vec3 dstPos = uHomography * srcPos;
-
-    // Perspective divide
-    vec3 localPos = vec3(dstPos.x / dstPos.z, dstPos.y / dstPos.z, 0.0);
-
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(localPos, 1.0);
-  }
-`;
-
-const fragmentShader = `
-  uniform sampler2D uTexture;
-  uniform float uOpacity;
-  varying vec2 vUv;
-
-  void main() {
-    vec4 color = texture2D(uTexture, vUv);
-    gl_FragColor = vec4(color.rgb, color.a * uOpacity);
-  }
-`;
 
 let overlayMesh = null;
 let material = null;
 
 /**
- * Create the overlay mesh with homography-warped texture.
+ * Create the overlay mesh by bilinear interpolation of 4 corner positions.
+ * Much more robust than the homography shader approach.
  *
- * texture: THREE.Texture of the selected image
- * dstPoints: array of 4 THREE.Vector3 positions in anchor-local space
- *            Order: top-left, top-right, bottom-right, bottom-left
+ * texture: THREE.Texture
+ * corners: array of 4 THREE.Vector3 in anchor-local space
+ *          Order: top-left, top-right, bottom-right, bottom-left
  * Returns: THREE.Mesh
  */
-export function createOverlayMesh(texture, dstPoints) {
-  // Source points: image corners in UV space (0-1)
-  const src = [
-    [0, 1], // top-left (UV: 0,1 because Y is flipped)
-    [1, 1], // top-right
-    [1, 0], // bottom-right
-    [0, 0], // bottom-left
-  ];
+export function createOverlayMesh(texture, corners) {
+  const segments = 32;
+  const vertCount = (segments + 1) * (segments + 1);
+  const positions = new Float32Array(vertCount * 3);
+  const uvs = new Float32Array(vertCount * 2);
 
-  // Destination points: project onto the local XZ plane (Y is up in AR)
-  // We use X and Z coordinates from the anchor-local positions
-  const dst = dstPoints.map(p => [p.x, p.z]);
+  const [tl, tr, br, bl] = corners;
 
-  const H = computeHomography(src, dst);
-  if (!H) {
-    console.error('Failed to compute homography');
-    return null;
+  // Generate vertices by bilinear interpolation
+  for (let iy = 0; iy <= segments; iy++) {
+    for (let ix = 0; ix <= segments; ix++) {
+      const idx = iy * (segments + 1) + ix;
+      const u = ix / segments;
+      const v = iy / segments;
+
+      // Bilinear interpolation of the 4 corners
+      // v=0 is top, v=1 is bottom (matching image top-to-bottom)
+      const top = new THREE.Vector3().lerpVectors(tl, tr, u);
+      const bottom = new THREE.Vector3().lerpVectors(bl, br, u);
+      const pos = new THREE.Vector3().lerpVectors(top, bottom, v);
+
+      positions[idx * 3] = pos.x;
+      positions[idx * 3 + 1] = pos.y;
+      positions[idx * 3 + 2] = pos.z;
+
+      // UV: u goes left-to-right, v goes top-to-bottom
+      // Three.js texture UV: (0,0) = bottom-left, so flip V
+      uvs[idx * 2] = u;
+      uvs[idx * 2 + 1] = 1.0 - v;
+    }
   }
 
-  material = new THREE.ShaderMaterial({
-    uniforms: {
-      uHomography: { value: new THREE.Matrix3().fromArray(H) },
-      uTexture: { value: texture },
-      uOpacity: { value: 0.4 },
-    },
-    vertexShader,
-    fragmentShader,
+  // Generate triangle indices
+  const indices = [];
+  for (let iy = 0; iy < segments; iy++) {
+    for (let ix = 0; ix < segments; ix++) {
+      const a = iy * (segments + 1) + ix;
+      const b = a + 1;
+      const c = a + (segments + 1);
+      const d = c + 1;
+      indices.push(a, b, c);
+      indices.push(b, d, c);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+
+  material = new THREE.MeshBasicMaterial({
+    map: texture,
     transparent: true,
-    depthWrite: false,
+    opacity: 0.4,
     side: THREE.DoubleSide,
+    depthWrite: false,
   });
-
-  // Subdivided plane for smooth homography warp
-  // Vertices start in UV space (0-1), vertex shader warps them
-  const geometry = new THREE.PlaneGeometry(1, 1, 32, 32);
-
-  // Rotate plane to lie on XZ (horizontal surface)
-  geometry.rotateX(-Math.PI / 2);
 
   overlayMesh = new THREE.Mesh(geometry, material);
   overlayMesh.frustumCulled = false;
@@ -88,7 +79,7 @@ export function createOverlayMesh(texture, dstPoints) {
 
 export function setOpacity(value) {
   if (material) {
-    material.uniforms.uOpacity.value = value;
+    material.opacity = value;
   }
 }
 
