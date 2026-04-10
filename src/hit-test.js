@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 let hitTestSource = null;
 let lastHitPose = null;
+let lastHitResult = null;
 let reticle = null;
 
 export function createReticle() {
@@ -30,6 +31,7 @@ export function processHitTest(frame, referenceSpace) {
     const pose = results[0].getPose(referenceSpace);
     if (pose) {
       lastHitPose = pose;
+      lastHitResult = results[0];
       if (reticle) {
         reticle.visible = true;
         reticle.matrix.fromArray(pose.transform.matrix);
@@ -38,11 +40,16 @@ export function processHitTest(frame, referenceSpace) {
   } else {
     if (reticle) reticle.visible = false;
     lastHitPose = null;
+    lastHitResult = null;
   }
 }
 
 export function getLastHitPose() {
   return lastHitPose;
+}
+
+export function getLastHitResult() {
+  return lastHitResult;
 }
 
 export function hideReticle() {
@@ -52,6 +59,7 @@ export function hideReticle() {
 export function dispose() {
   hitTestSource = null;
   lastHitPose = null;
+  lastHitResult = null;
   if (reticle) {
     reticle.geometry.dispose();
     reticle.material.dispose();

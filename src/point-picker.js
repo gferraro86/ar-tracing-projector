@@ -18,6 +18,7 @@ let scene = null;
 let counterEl = null;
 let undoBtn = null;
 let instructionsEl = null;
+let undoTimestamp = 0;
 
 export function initPointPicker(sceneRef, counterElement, undoButton, completeCb) {
   scene = sceneRef;
@@ -27,11 +28,15 @@ export function initPointPicker(sceneRef, counterElement, undoButton, completeCb
   onComplete = completeCb;
   points.length = 0;
   markers.length = 0;
+  undoTimestamp = 0;
   updateUI();
 }
 
 export function handleSelect(referenceSpace) {
   if (points.length >= 4) return;
+
+  // Debounce: ignore select events shortly after an undo
+  if (Date.now() - undoTimestamp < 400) return;
 
   const pose = getLastHitPose();
   if (!pose) return;
@@ -81,6 +86,8 @@ function addMarker(position, index) {
 
 export function undoLastPoint() {
   if (points.length === 0) return;
+
+  undoTimestamp = Date.now();
   points.pop();
 
   // Remove marker sphere
@@ -89,7 +96,7 @@ export function undoLastPoint() {
   sphere.geometry.dispose();
   sphere.material.dispose();
 
-  // Remove connecting line (if any, always present after first point)
+  // Remove connecting line (if any)
   if (markers.length > 0 && markers[markers.length - 1] instanceof THREE.Line) {
     const line = markers.pop();
     scene.remove(line);
@@ -104,7 +111,6 @@ function updateUI() {
   if (counterEl) counterEl.textContent = `${points.length} / 4`;
   if (undoBtn) undoBtn.disabled = points.length === 0;
 
-  // Update instructions to show which corner to place next
   if (instructionsEl) {
     if (points.length < 4) {
       const nextLabel = CORNER_LABELS[points.length];
@@ -123,6 +129,7 @@ export function reset() {
   }
   markers.length = 0;
   points.length = 0;
+  undoTimestamp = 0;
   updateUI();
 }
 

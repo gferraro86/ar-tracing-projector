@@ -9,17 +9,9 @@ import {
   getReferenceSpace,
 } from './ar-session.js';
 import { initPointPicker, handleSelect, undoLastPoint, reset as resetPoints } from './point-picker.js';
-import { anchorOverlay, resetAnchor, confirmAndLock } from './anchor-manager.js';
-import { hideReticle } from './hit-test.js';
-import {
-  setupTracingUI,
-  showPickingUI,
-  showConfirmUI,
-  showLockingStatus,
-  showTracingUI,
-  showOverlay,
-  hideOverlay,
-} from './ui.js';
+import { anchorOverlay, resetAnchor } from './anchor-manager.js';
+import { hideReticle, getLastHitResult } from './hit-test.js';
+import { setupTracingUI, showPickingUI, showTracingUI, showOverlay, hideOverlay } from './ui.js';
 
 // DOM elements
 const fileInput = document.getElementById('image-input');
@@ -32,12 +24,11 @@ const pointCounter = document.getElementById('point-counter');
 const btnUndoPoint = document.getElementById('btn-undo-point');
 const opacitySlider = document.getElementById('opacity-slider');
 const opacityValue = document.getElementById('opacity-value');
-const btnConfirm = document.getElementById('btn-confirm');
-const btnRedo = document.getElementById('btn-redo');
 const btnReset = document.getElementById('btn-reset');
 const btnExit = document.getElementById('btn-exit');
 
 let pendingAnchorPoints = null;
+let pendingHitResult = null;
 
 async function init() {
   setupImageLoader(fileInput, previewImg, previewContainer, btnStartAR);
@@ -53,8 +44,6 @@ async function init() {
 
   btnStartAR.addEventListener('click', onStartAR);
   btnUndoPoint.addEventListener('click', () => undoLastPoint());
-  btnConfirm.addEventListener('click', onConfirm);
-  btnRedo.addEventListener('click', onReset);
   btnReset.addEventListener('click', onReset);
   btnExit.addEventListener('click', onExit);
 }
@@ -87,36 +76,30 @@ async function onStartAR() {
 function onPointsComplete(points) {
   hideReticle();
   pendingAnchorPoints = points;
+  // Capture the current hit test result for stable anchor creation
+  pendingHitResult = getLastHitResult();
   setOnSelect(null);
 
-  // Create the overlay in the next render frame
+  // Create the anchor in the next render frame
   setOnFrame(async (timestamp, frame) => {
     if (!pendingAnchorPoints) return;
 
     const pts = pendingAnchorPoints;
+    const hitResult = pendingHitResult;
     pendingAnchorPoints = null;
+    pendingHitResult = null;
 
     const texture = getTexture();
-    const success = await anchorOverlay(frame, pts, getReferenceSpace(), texture);
+    const success = await anchorOverlay(hitResult, frame, pts, getReferenceSpace(), texture);
 
     setOnFrame(null);
 
     if (success) {
-      // Show confirm UI — image is visible but not locked yet
-      showConfirmUI();
+      showTracingUI();
     } else {
       console.error('Failed to create anchor overlay');
       onReset();
     }
-  });
-}
-
-function onConfirm() {
-  showLockingStatus();
-
-  // Collect 20 frames of pose data, average, and lock
-  confirmAndLock(() => {
-    showTracingUI();
   });
 }
 
