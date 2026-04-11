@@ -7,7 +7,6 @@
   <title>AR Tracing Projector</title>
   <link rel="stylesheet" href="/styles/app.css">
   <script>
-    // Force service worker update on each deploy
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(r => r.update());
@@ -39,30 +38,31 @@
     </div>
   </div>
 
-  <!-- AR DOM Overlay (shown inside WebXR session) -->
+  <!-- AR DOM Overlay -->
   <div id="ar-overlay" class="hidden" onbeforexrselect="event.preventDefault()">
-    <!-- Point picking phase -->
-    <div id="ar-picking-ui">
-      <p id="picking-instructions" class="ar-instructions">
-        Tocca i 4 angoli della superficie (senso orario da in alto a sinistra)
-      </p>
-      <div id="point-counter" class="point-counter">0 / 4</div>
-      <button id="btn-undo-point" class="btn btn-small" disabled>Annulla ultimo</button>
+
+    <!-- Calibration phase: 4 draggable corners + Confirm + Exit -->
+    <div id="ar-calibrate-ui">
+      <p class="ar-instructions">Trascina i 4 punti sugli angoli del canvas</p>
+      <div id="corner-handles-container"></div>
+      <button id="btn-confirm" class="btn btn-confirm">Conferma</button>
+      <button id="btn-exit-calibrate" class="btn-icon btn-icon-top-right" title="Esci">&times;</button>
     </div>
 
-    <!-- Tracing phase -->
+    <!-- Tracing phase: hidden menu, only handle visible -->
     <div id="ar-tracing-ui" class="hidden">
-      <div class="opacity-control">
-        <label for="opacity-slider">Opacit&agrave;</label>
-        <input type="range" id="opacity-slider" min="0" max="100" value="40">
-        <span id="opacity-value">40%</span>
-      </div>
-      <div class="tracing-buttons">
+      <button id="tracing-menu-handle" class="btn-icon btn-icon-top-right" title="Menu">&#9776;</button>
+      <div id="tracing-menu" class="hidden">
+        <div class="opacity-control">
+          <label for="opacity-slider">Opacit&agrave;</label>
+          <input type="range" id="opacity-slider" min="0" max="100" value="40">
+          <span id="opacity-value">40%</span>
+        </div>
         <button id="btn-realign" class="btn btn-small btn-realign">Riallinea</button>
-        <button id="btn-reset" class="btn btn-small">Reset</button>
         <button id="btn-exit" class="btn btn-small btn-danger">Esci</button>
       </div>
     </div>
+
   </div>
 
   <script type="module" src="/src/main.js"></script>

@@ -4,6 +4,7 @@ import { createOverlayMesh, disposeOverlay } from './overlay-mesh.js';
 let anchor = null;
 let overlayGroup = null;
 let scene = null;
+let lastCornerLocalPositions = null; // 4 corner positions in anchor-local space
 
 export function initAnchorManager(sceneRef) {
   scene = sceneRef;
@@ -51,6 +52,7 @@ export async function anchorOverlay(hitTestResult, frame, cornerPoints, centerPo
   if (!mesh) return false;
 
   overlayGroup.add(mesh);
+  lastCornerLocalPositions = localPoints.map(p => p.clone());
 
   // Create anchor from hit test result (most stable — attached to surface features)
   let anchorCreated = false;
@@ -110,6 +112,7 @@ export function updateAnchor(frame, referenceSpace) {
 export function resetAnchor() {
   if (anchor && anchor.delete) anchor.delete();
   anchor = null;
+  lastCornerLocalPositions = null;
 
   while (overlayGroup.children.length > 0) {
     overlayGroup.remove(overlayGroup.children[0]);
@@ -125,6 +128,16 @@ export function resetAnchor() {
 export function releaseAnchorKeepMesh() {
   if (anchor && anchor.delete) anchor.delete();
   anchor = null;
+}
+
+/**
+ * Get the 4 current corner positions in WORLD space (after applying
+ * the overlayGroup's matrix). Used to project them back to screen for realign.
+ * Returns null if no overlay is currently active.
+ */
+export function getLastCornerWorldPositions() {
+  if (!lastCornerLocalPositions || !overlayGroup) return null;
+  return lastCornerLocalPositions.map(p => p.clone().applyMatrix4(overlayGroup.matrix));
 }
 
 export function dispose() {

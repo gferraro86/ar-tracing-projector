@@ -1,17 +1,40 @@
+import * as THREE from 'three';
 import { setupImageLoader, getTexture } from './image-loader.js';
 import {
   checkARSupport,
   startARSession,
   endSession,
-  setOnSelect,
   setOnFrame,
   getScene,
+  getRenderer,
   getReferenceSpace,
 } from './ar-session.js';
-import { initPointPicker, handleSelect, undoLastPoint, reset as resetPoints } from './point-picker.js';
-import { anchorOverlay, resetAnchor, releaseAnchorKeepMesh } from './anchor-manager.js';
-import { hideReticle, getLastHitResult } from './hit-test.js';
-import { setupTracingUI, showPickingUI, showTracingUI, showOverlay, hideOverlay } from './ui.js';
+import {
+  anchorOverlay,
+  resetAnchor,
+  releaseAnchorKeepMesh,
+  getLastCornerWorldPositions,
+} from './anchor-manager.js';
+import { hideReticle, getLastHitPose, getLastHitResult } from './hit-test.js';
+import {
+  initCornerHandles,
+  setDefaultPositions,
+  setHandlePositions,
+  getHandlePositions,
+  showHandles,
+  hideHandles,
+  disposeCornerHandles,
+} from './corner-handles.js';
+import { screenToWorld, worldToScreen, planeFromHitPose } from './screen-to-world.js';
+import {
+  setupOpacityControl,
+  showCalibrateUI,
+  showTracingUI,
+  toggleTracingMenu,
+  hideTracingMenu,
+  showOverlay,
+  hideOverlay,
+} from './ui.js';
 
 // DOM elements
 const fileInput = document.getElementById('image-input');
@@ -20,19 +43,18 @@ const previewContainer = document.getElementById('image-preview');
 const btnStartAR = document.getElementById('btn-start-ar');
 const arError = document.getElementById('ar-error');
 const arOverlay = document.getElementById('ar-overlay');
-const pointCounter = document.getElementById('point-counter');
-const btnUndoPoint = document.getElementById('btn-undo-point');
+const cornerHandlesContainer = document.getElementById('corner-handles-container');
+const btnConfirm = document.getElementById('btn-confirm');
+const btnExitCalibrate = document.getElementById('btn-exit-calibrate');
+const btnRealign = document.getElementById('btn-realign');
+const btnExit = document.getElementById('btn-exit');
 const opacitySlider = document.getElementById('opacity-slider');
 const opacityValue = document.getElementById('opacity-value');
-const btnReset = document.getElementById('btn-reset');
-const btnExit = document.getElementById('btn-exit');
-const btnRealign = document.getElementById('btn-realign');
-
-let cornerPoints = null;
+const tracingMenuHandle = document.getElementById('tracing-menu-handle');
 
 async function init() {
   setupImageLoader(fileInput, previewImg, previewContainer, btnStartAR);
-  setupTracingUI(opacitySlider, opacityValue);
+  setupOpacityControl(opacitySlider, opacityValue);
 
   const arSupported = await checkARSupport();
   if (!arSupported) {
@@ -43,10 +65,11 @@ async function init() {
   }
 
   btnStartAR.addEventListener('click', onStartAR);
-  btnUndoPoint.addEventListener('click', () => undoLastPoint());
-  btnReset.addEventListener('click', onReset);
-  btnExit.addEventListener('click', onExit);
+  btnConfirm.addEventListener('click', onConfirm);
+  btnExitCalibrate.addEventListener('click', onExit);
   btnRealign.addEventListener('click', onRealign);
+  btnExit.addEventListener('click', onExit);
+  tracingMenuHandle.addEventListener('click', toggleTracingMenu);
 }
 
 async function onStartAR() {
@@ -56,24 +79,14 @@ async function onStartAR() {
   try {
     document.getElementById('screen-picker').classList.remove('active');
     showOverlay();
-    showPickingUI();
+    showCalibrateUI();
 
     await startARSession(arOverlay);
 
-    // Init point picker with two callbacks:
-    // 1. onCornersComplete: called after 4 corner taps (shows "tap center" instruction)
-    // 2. onCenterComplete: called after 5th tap at center
-    initPointPicker(
-      getScene(),
-      pointCounter,
-      btnUndoPoint,
-      onCornersComplete,
-      onCenterComplete
-    );
-
-    setOnSelect(() => {
-      handleSelect(getReferenceSpace());
-    });
+    // Create the 4 draggable corner handles
+    initCornerHandles(cornerHandlesContainer);
+    setDefaultPositions();
+    showHandles();
   } catch (e) {
     console.error('Failed to start AR:', e);
     arError.textContent = `Errore avvio AR: ${e.message}`;
@@ -83,17 +96,55 @@ async function onStartAR() {
   }
 }
 
-function onCornersComplete(points) {
-  // Store corners, wait for center tap
-  cornerPoints = points;
-}
+function onConfirm() {
+  // Get current handle positions in screen pixels
+  const handlePositions = getHandlePositions();
 
-function onCenterComplete(centerPoint, centerQuat) {
-  hideReticle();
-  setOnSelect(null);
+  // Get the surface plane from the last hit test (the reticle is pointing at it)
+  const hitPose = getLastHitPose();
+  if (!hitPose) {
+    alert('Nessuna superficie rilevata. Inquadra il canvas e riprova.');
+    return;
+  }
 
-  // Capture the hit test result at the center point
+  const plane = planeFromHitPose(hitPose);
+  if (!plane) {
+    alert('Errore nel calcolo del piano.');
+    return;
+  }
+
+  // Get the synced XR camera from Three.js
+  const xrCamera = getRenderer().xr.getCamera();
+
+  // Convert each handle screen position to a world point on the plane
+  const cornerPoints = [];
+  for (const pos of handlePositions) {
+    const worldPoint = screenToWorld(pos.x, pos.y, plane, xrCamera);
+    if (!worldPoint) {
+      alert('Impossibile proiettare i punti sul piano. Riprova.');
+      return;
+    }
+    cornerPoints.push(worldPoint);
+  }
+
+  // Compute centroid as the anchor center
+  const centroid = new THREE.Vector3();
+  for (const p of cornerPoints) centroid.add(p);
+  centroid.divideScalar(4);
+
+  // Get center quaternion from the hit pose
+  const centerQuat = new THREE.Quaternion(
+    hitPose.transform.orientation.x,
+    hitPose.transform.orientation.y,
+    hitPose.transform.orientation.z,
+    hitPose.transform.orientation.w
+  );
+
   const hitResult = getLastHitResult();
+
+  // Hide handles immediately so they don't sit on top during transition
+  hideHandles();
+  hideReticle();
 
   // Create the anchor in the next render frame
   setOnFrame(async (timestamp, frame) => {
@@ -102,7 +153,7 @@ function onCenterComplete(centerPoint, centerQuat) {
       hitResult,
       frame,
       cornerPoints,
-      centerPoint,
+      centroid,
       centerQuat,
       getReferenceSpace(),
       texture
@@ -114,56 +165,36 @@ function onCenterComplete(centerPoint, centerQuat) {
       showTracingUI();
     } else {
       console.error('Failed to create anchor overlay');
-      onReset();
+      // Roll back to calibration
+      showHandles();
+      showCalibrateUI();
     }
   });
 }
 
-function onReset() {
-  cornerPoints = null;
-  resetPoints();
-  resetAnchor();
-  showPickingUI();
-
-  initPointPicker(
-    getScene(),
-    pointCounter,
-    btnUndoPoint,
-    onCornersComplete,
-    onCenterComplete
-  );
-  setOnSelect(() => {
-    handleSelect(getReferenceSpace());
-  });
-}
-
 function onRealign() {
-  // Release the current anchor but keep the existing overlay mesh visible
-  // so the user can see where it was before tapping new corners.
-  cornerPoints = null;
-  resetPoints();
+  hideTracingMenu();
+
+  // Get the current overlay corners in world space, project them to screen pixels
+  const worldCorners = getLastCornerWorldPositions();
   releaseAnchorKeepMesh();
-  showPickingUI();
 
-  // Update the picking instructions to reflect the realign context
-  const instructionsEl = document.getElementById('picking-instructions');
-  if (instructionsEl) {
-    instructionsEl.textContent = 'Riallineamento: tocca i 4 angoli + il centro';
+  showCalibrateUI();
+  showHandles();
+
+  if (worldCorners) {
+    const xrCamera = getRenderer().xr.getCamera();
+    const screenPositions = worldCorners.map(wp => worldToScreen(wp, xrCamera));
+    setHandlePositions(screenPositions);
+  } else {
+    setDefaultPositions();
   }
-
-  initPointPicker(
-    getScene(),
-    pointCounter,
-    btnUndoPoint,
-    onCornersComplete,
-    onCenterComplete
-  );
-  setOnSelect(() => {
-    handleSelect(getReferenceSpace());
-  });
 }
 
 async function onExit() {
+  hideHandles();
+  disposeCornerHandles();
+  resetAnchor();
   await endSession();
   hideOverlay();
   document.getElementById('screen-picker').classList.add('active');

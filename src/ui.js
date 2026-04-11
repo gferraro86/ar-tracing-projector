@@ -1,21 +1,31 @@
 import { setOpacity } from './overlay-mesh.js';
 
-export function setupTracingUI(opacitySlider, opacityValue) {
-  opacitySlider.addEventListener('input', (e) => {
+export function setupOpacityControl(slider, valueEl) {
+  slider.addEventListener('input', (e) => {
     const val = parseInt(e.target.value, 10);
-    opacityValue.textContent = `${val}%`;
+    valueEl.textContent = `${val}%`;
     setOpacity(val / 100);
   });
 }
 
-export function showPickingUI() {
-  document.getElementById('ar-picking-ui').classList.remove('hidden');
+export function showCalibrateUI() {
+  document.getElementById('ar-calibrate-ui').classList.remove('hidden');
   document.getElementById('ar-tracing-ui').classList.add('hidden');
+  document.getElementById('tracing-menu').classList.add('hidden');
 }
 
 export function showTracingUI() {
-  document.getElementById('ar-picking-ui').classList.add('hidden');
+  document.getElementById('ar-calibrate-ui').classList.add('hidden');
   document.getElementById('ar-tracing-ui').classList.remove('hidden');
+  document.getElementById('tracing-menu').classList.add('hidden');
+}
+
+export function toggleTracingMenu() {
+  document.getElementById('tracing-menu').classList.toggle('hidden');
+}
+
+export function hideTracingMenu() {
+  document.getElementById('tracing-menu').classList.add('hidden');
 }
 
 export function showOverlay() {

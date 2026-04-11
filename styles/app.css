@@ -91,21 +91,62 @@ body {
 }
 
 .btn-small {
-  padding: 0.5rem 1rem;
+  padding: 0.6rem 1.1rem;
   font-size: 0.85rem;
   width: auto;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.18);
   color: white;
   border-radius: 6px;
+  border: none;
+  cursor: pointer;
 }
 
 .btn-danger {
-  background: rgba(220, 50, 50, 0.6);
+  background: rgba(220, 50, 50, 0.7);
 }
 
 .btn-realign {
-  background: rgba(255, 165, 0, 0.7);
+  background: rgba(255, 165, 0, 0.8);
   font-weight: bold;
+}
+
+.btn-confirm {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: auto;
+  padding: 0.9rem 2.5rem;
+  background: rgba(40, 200, 100, 0.9);
+  color: white;
+  font-weight: bold;
+  font-size: 1rem;
+  border: none;
+  border-radius: 30px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-icon {
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 1.4rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-icon-top-right {
+  position: absolute;
+  top: 16px;
+  right: 16px;
 }
 
 .error {
@@ -114,7 +155,7 @@ body {
   margin-top: 1rem;
 }
 
-/* AR Overlay UI */
+/* AR Overlay */
 #ar-overlay {
   position: absolute;
   top: 0;
@@ -124,9 +165,10 @@ body {
   pointer-events: none;
 }
 
-#ar-overlay .btn,
+#ar-overlay button,
 #ar-overlay input,
-#ar-overlay label {
+#ar-overlay label,
+#ar-overlay .drag-corner {
   pointer-events: auto;
 }
 
@@ -135,100 +177,91 @@ body {
   top: 20px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.8);
-  padding: 12px 20px;
+  background: rgba(0, 0, 0, 0.75);
+  padding: 10px 18px;
   border-radius: 8px;
-  font-size: 1rem;
-  font-weight: bold;
+  font-size: 0.9rem;
+  font-weight: 500;
   text-align: center;
-  max-width: 90%;
+  max-width: 85%;
   pointer-events: none;
-  letter-spacing: 0.5px;
 }
 
-.point-counter {
+/* Draggable corner handles */
+#corner-handles-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.drag-corner {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 0.85rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  opacity: 0.85;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.15s ease;
+}
+
+.drag-corner:active {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+/* Tracing menu */
+#tracing-menu {
   position: absolute;
   top: 70px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(67, 97, 238, 0.8);
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 0.9rem;
-  font-weight: bold;
+  right: 16px;
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: 12px;
+  padding: 16px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
 }
 
-.markers-status {
-  position: absolute;
-  top: 110px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.6);
-  padding: 5px 12px;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-.info-box {
-  background: rgba(67, 97, 238, 0.15);
-  border: 1px solid rgba(67, 97, 238, 0.4);
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  margin-bottom: 1.5rem;
-}
-
-.info-box a {
-  color: #88a4ff;
-  text-decoration: underline;
-  display: block;
-  margin-top: 6px;
-}
-
-#btn-undo-point {
-  position: absolute;
-  bottom: 40px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-/* Tracing UI */
-.opacity-control {
-  position: absolute;
-  bottom: 100px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.7);
-  padding: 10px 16px;
-  border-radius: 10px;
+#tracing-menu .opacity-control {
   display: flex;
   align-items: center;
   gap: 10px;
-  pointer-events: auto;
+  padding: 6px 0;
 }
 
-.opacity-control label {
-  font-size: 0.8rem;
+#tracing-menu .opacity-control label {
+  font-size: 0.85rem;
   white-space: nowrap;
 }
 
-.opacity-control input[type="range"] {
-  width: 120px;
+#tracing-menu input[type="range"] {
+  flex: 1;
   accent-color: #4361ee;
 }
 
-#opacity-value {
+#tracing-menu #opacity-value {
   font-size: 0.8rem;
-  min-width: 35px;
+  min-width: 38px;
+  text-align: right;
 }
 
-.tracing-buttons {
-  position: absolute;
-  bottom: 40px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 12px;
+#tracing-menu .btn-small {
+  width: 100%;
+  margin: 0;
 }
