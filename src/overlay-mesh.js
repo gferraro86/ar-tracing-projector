@@ -2,45 +2,25 @@ import * as THREE from 'three';
 
 let overlayMesh = null;
 let material = null;
+let geometry = null;
+let positions = null;
+const segments = 16; // smaller mesh for faster per-frame updates
 
 /**
- * Create the overlay mesh by bilinear interpolation of 4 corner positions.
- * Much more robust than the homography shader approach.
- *
- * texture: THREE.Texture
- * corners: array of 4 THREE.Vector3 in anchor-local space
- *          Order: top-left, top-right, bottom-right, bottom-left
- * Returns: THREE.Mesh
+ * Create the overlay mesh. Initial vertex positions are zero — call updateOverlayCorners()
+ * to set the actual corners. The mesh is dynamic and updates each frame.
  */
-export function createOverlayMesh(texture, corners) {
-  const segments = 32;
+export function createOverlayMesh(texture) {
   const vertCount = (segments + 1) * (segments + 1);
-  const positions = new Float32Array(vertCount * 3);
+  positions = new Float32Array(vertCount * 3);
   const uvs = new Float32Array(vertCount * 2);
 
-  const [tl, tr, br, bl] = corners;
-
-  // Generate vertices by bilinear interpolation
+  // Generate UVs
   for (let iy = 0; iy <= segments; iy++) {
     for (let ix = 0; ix <= segments; ix++) {
       const idx = iy * (segments + 1) + ix;
-      const u = ix / segments;
-      const v = iy / segments;
-
-      // Bilinear interpolation of the 4 corners
-      // v=0 is top, v=1 is bottom (matching image top-to-bottom)
-      const top = new THREE.Vector3().lerpVectors(tl, tr, u);
-      const bottom = new THREE.Vector3().lerpVectors(bl, br, u);
-      const pos = new THREE.Vector3().lerpVectors(top, bottom, v);
-
-      positions[idx * 3] = pos.x;
-      positions[idx * 3 + 1] = pos.y;
-      positions[idx * 3 + 2] = pos.z;
-
-      // UV: u goes left-to-right, v goes top-to-bottom
-      // Three.js texture UV: (0,0) = bottom-left, so flip V
-      uvs[idx * 2] = u;
-      uvs[idx * 2 + 1] = 1.0 - v;
+      uvs[idx * 2] = ix / segments;
+      uvs[idx * 2 + 1] = 1.0 - iy / segments;
     }
   }
 
@@ -57,11 +37,10 @@ export function createOverlayMesh(texture, corners) {
     }
   }
 
-  const geometry = new THREE.BufferGeometry();
+  geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
   geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(indices), 1));
-  geometry.computeVertexNormals();
 
   material = new THREE.MeshBasicMaterial({
     map: texture,
@@ -77,6 +56,41 @@ export function createOverlayMesh(texture, corners) {
   return overlayMesh;
 }
 
+/**
+ * Update mesh vertex positions from 4 world-space corner points.
+ * Uses bilinear interpolation. Called each frame from the render loop.
+ *
+ * corners: array of 4 THREE.Vector3 (top-left, top-right, bottom-right, bottom-left)
+ */
+export function updateOverlayCorners(corners) {
+  if (!geometry || !positions) return;
+
+  const [tl, tr, br, bl] = corners;
+
+  for (let iy = 0; iy <= segments; iy++) {
+    for (let ix = 0; ix <= segments; ix++) {
+      const idx = iy * (segments + 1) + ix;
+      const u = ix / segments;
+      const v = iy / segments;
+
+      // Bilinear interpolation
+      const topX = tl.x + (tr.x - tl.x) * u;
+      const topY = tl.y + (tr.y - tl.y) * u;
+      const topZ = tl.z + (tr.z - tl.z) * u;
+
+      const botX = bl.x + (br.x - bl.x) * u;
+      const botY = bl.y + (br.y - bl.y) * u;
+      const botZ = bl.z + (br.z - bl.z) * u;
+
+      positions[idx * 3] = topX + (botX - topX) * v;
+      positions[idx * 3 + 1] = topY + (botY - topY) * v;
+      positions[idx * 3 + 2] = topZ + (botZ - topZ) * v;
+    }
+  }
+
+  geometry.attributes.position.needsUpdate = true;
+}
+
 export function setOpacity(value) {
   if (material) {
     material.opacity = value;
@@ -89,5 +103,7 @@ export function disposeOverlay() {
     overlayMesh.material.dispose();
     overlayMesh = null;
     material = null;
+    geometry = null;
+    positions = null;
   }
 }

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Stampa Marker - AR Tracing Projector</title>
+  <style>
+    body {
+      font-family: -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 20px;
+    }
+    h1 { font-size: 1.4rem; }
+    .instructions {
+      background: #f0f0f0;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .instructions ol {
+      margin-left: 20px;
+    }
+    .markers {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      page-break-inside: avoid;
+    }
+    .marker {
+      text-align: center;
+      page-break-inside: avoid;
+    }
+    .marker img {
+      width: 8cm;
+      height: 8cm;
+      border: 1px solid #ccc;
+    }
+    .marker p {
+      margin-top: 5px;
+      font-size: 0.9rem;
+      color: #666;
+    }
+    .print-btn {
+      background: #4361ee;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      margin: 20px 0;
+    }
+    @media print {
+      .instructions, .print-btn { display: none; }
+      body { margin: 0; padding: 10mm; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Marker AR Tracing Projector</h1>
+  <div class="instructions">
+    <p><strong>Istruzioni:</strong></p>
+    <ol>
+      <li>Stampa questa pagina (idealmente su carta bianca opaca)</li>
+      <li>Ritaglia i marker che ti servono (almeno 4 sono consigliati)</li>
+      <li>Attaccali con nastro adesivo di carta sui bordi del canvas o intorno ad esso</li>
+      <li>Importante: <strong>devono essere sullo stesso piano del canvas</strong></li>
+      <li>Apri l'app, scegli un'immagine, e segui le istruzioni di calibrazione</li>
+    </ol>
+    <p><strong>Suggerimenti:</strong></p>
+    <ul>
+      <li>Pi&ugrave; marker = pi&ugrave; stabilit&agrave;</li>
+      <li>Distribuiscili intorno al canvas, non solo da un lato</li>
+      <li>Tienili lontani dall'area dove disegnerai per non coprirli con la mano</li>
+      <li>Assicurati che il bordo nero sia ben visibile e non strappato</li>
+    </ul>
+  </div>
+  <button class="print-btn" onclick="window.print()">Stampa</button>
+
+  <div class="markers">
+    <div class="marker"><img src="marker-1.png" alt="Marker 1"><p>Marker 1</p></div>
+    <div class="marker"><img src="marker-2.png" alt="Marker 2"><p>Marker 2</p></div>
+    <div class="marker"><img src="marker-3.png" alt="Marker 3"><p>Marker 3</p></div>
+    <div class="marker"><img src="marker-4.png" alt="Marker 4"><p>Marker 4</p></div>
+    <div class="marker"><img src="marker-5.png" alt="Marker 5"><p>Marker 5</p></div>
+    <div class="marker"><img src="marker-6.png" alt="Marker 6"><p>Marker 6</p></div>
+    <div class="marker"><img src="marker-7.png" alt="Marker 7"><p>Marker 7</p></div>
+    <div class="marker"><img src="marker-8.png" alt="Marker 8"><p>Marker 8</p></div>
+  </div>
+</body>
+</html>

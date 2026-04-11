@@ -153,6 +153,35 @@ body {
   font-weight: bold;
 }
 
+.markers-status {
+  position: absolute;
+  top: 110px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.info-box {
+  background: rgba(67, 97, 238, 0.15);
+  border: 1px solid rgba(67, 97, 238, 0.4);
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+
+.info-box a {
+  color: #88a4ff;
+  text-decoration: underline;
+  display: block;
+  margin-top: 6px;
+}
+
 #btn-undo-point {
   position: absolute;
   bottom: 40px;
