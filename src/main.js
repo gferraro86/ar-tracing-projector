@@ -8,6 +8,8 @@ import {
   getScene,
   getRenderer,
   getReferenceSpace,
+  getCurrentProjectionMatrix,
+  getCurrentCameraMatrix,
 } from './ar-session.js';
 import {
   anchorOverlay,
@@ -113,13 +115,15 @@ function onConfirm() {
     return;
   }
 
-  // Get the synced XR camera from Three.js
-  const xrCamera = getRenderer().xr.getCamera();
+  // Use the raw XR view matrices captured each frame (more reliable than
+  // Three.js ArrayCamera which has stereo quirks)
+  const projMatrix = getCurrentProjectionMatrix();
+  const cameraMatrix = getCurrentCameraMatrix();
 
   // Convert each handle screen position to a world point on the plane
   const cornerPoints = [];
   for (const pos of handlePositions) {
-    const worldPoint = screenToWorld(pos.x, pos.y, plane, xrCamera);
+    const worldPoint = screenToWorld(pos.x, pos.y, plane, projMatrix, cameraMatrix);
     if (!worldPoint) {
       alert('Impossibile proiettare i punti sul piano. Riprova.');
       return;
@@ -127,12 +131,15 @@ function onConfirm() {
     cornerPoints.push(worldPoint);
   }
 
-  // Compute centroid as the anchor center
-  const centroid = new THREE.Vector3();
-  for (const p of cornerPoints) centroid.add(p);
-  centroid.divideScalar(4);
+  // IMPORTANT: use the hit pose POSITION as the anchor center, not the
+  // centroid. The anchor will be created at the hit pose position; if we used
+  // the centroid the mesh would be offset from the actual anchor.
+  const centerPoint = new THREE.Vector3(
+    hitPose.transform.position.x,
+    hitPose.transform.position.y,
+    hitPose.transform.position.z
+  );
 
-  // Get center quaternion from the hit pose
   const centerQuat = new THREE.Quaternion(
     hitPose.transform.orientation.x,
     hitPose.transform.orientation.y,
@@ -153,7 +160,7 @@ function onConfirm() {
       hitResult,
       frame,
       cornerPoints,
-      centroid,
+      centerPoint,
       centerQuat,
       getReferenceSpace(),
       texture
@@ -183,8 +190,9 @@ function onRealign() {
   showHandles();
 
   if (worldCorners) {
-    const xrCamera = getRenderer().xr.getCamera();
-    const screenPositions = worldCorners.map(wp => worldToScreen(wp, xrCamera));
+    const projMatrix = getCurrentProjectionMatrix();
+    const cameraMatrix = getCurrentCameraMatrix();
+    const screenPositions = worldCorners.map(wp => worldToScreen(wp, projMatrix, cameraMatrix));
     setHandlePositions(screenPositions);
   } else {
     setDefaultPositions();

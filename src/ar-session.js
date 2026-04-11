@@ -10,10 +10,16 @@ let referenceSpace = null;
 let onSelectCallback = null;
 let onFrameCallback = null;
 
+// Captured each frame from the current XRView (for reliable raycasting)
+const currentProjectionMatrix = new THREE.Matrix4();
+const currentCameraMatrix = new THREE.Matrix4();
+
 export function getScene() { return scene; }
 export function getRenderer() { return renderer; }
 export function getReferenceSpace() { return referenceSpace; }
 export function getSession() { return session; }
+export function getCurrentProjectionMatrix() { return currentProjectionMatrix; }
+export function getCurrentCameraMatrix() { return currentCameraMatrix; }
 
 export async function checkARSupport() {
   if (!navigator.xr) return false;
@@ -79,6 +85,14 @@ export async function startARSession(overlayElement) {
 
 function onFrame(timestamp, frame) {
   if (!frame) return;
+
+  // Capture current XRView matrices for raycasting outside the render loop
+  const viewerPose = frame.getViewerPose(referenceSpace);
+  if (viewerPose && viewerPose.views.length > 0) {
+    const view = viewerPose.views[0];
+    currentProjectionMatrix.fromArray(view.projectionMatrix);
+    currentCameraMatrix.fromArray(view.transform.matrix);
+  }
 
   // Process hit test for reticle
   processHitTest(frame, referenceSpace);
