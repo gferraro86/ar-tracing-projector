@@ -103,6 +103,11 @@ body {
   background: rgba(220, 50, 50, 0.6);
 }
 
+.btn-realign {
+  background: rgba(255, 165, 0, 0.7);
+  font-weight: bold;
+}
+
 .error {
   color: #e74c3c;
   font-size: 0.85rem;

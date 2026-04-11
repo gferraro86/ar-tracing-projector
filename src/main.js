@@ -1,9 +1,17 @@
 import { setupImageLoader, getTexture } from './image-loader.js';
-import { startARScene, stopARScene, getScene, getCamera, getArContext, setOnFrame } from './ar-scene.js';
-import { initMarkers, updateMarkers, getVisibleMarkers, disposeMarkers } from './marker-tracker.js';
-import { calibrateCanvas, getCurrentCorners, isCalibrated, resetCalibration } from './canvas-mapper.js';
-import { initCornerPicker, handleTap, undoLastTap, reset as resetCornerPicker, clearVisuals } from './corner-picker.js';
-import { createOverlayMesh, updateOverlayCorners, disposeOverlay, setOpacity } from './overlay-mesh.js';
+import {
+  checkARSupport,
+  startARSession,
+  endSession,
+  setOnSelect,
+  setOnFrame,
+  getScene,
+  getReferenceSpace,
+} from './ar-session.js';
+import { initPointPicker, handleSelect, undoLastPoint, reset as resetPoints } from './point-picker.js';
+import { anchorOverlay, resetAnchor, releaseAnchorKeepMesh } from './anchor-manager.js';
+import { hideReticle, getLastHitResult } from './hit-test.js';
+import { setupTracingUI, showPickingUI, showTracingUI, showOverlay, hideOverlay } from './ui.js';
 
 // DOM elements
 const fileInput = document.getElementById('image-input');
@@ -18,27 +26,27 @@ const opacitySlider = document.getElementById('opacity-slider');
 const opacityValue = document.getElementById('opacity-value');
 const btnReset = document.getElementById('btn-reset');
 const btnExit = document.getElementById('btn-exit');
-const markersStatus = document.getElementById('markers-status');
+const btnRealign = document.getElementById('btn-realign');
 
-let mode = 'idle'; // 'idle' | 'calibrating' | 'tracing'
-let overlayMesh = null;
+let cornerPoints = null;
 
-function init() {
+async function init() {
   setupImageLoader(fileInput, previewImg, previewContainer, btnStartAR);
+  setupTracingUI(opacitySlider, opacityValue);
 
-  opacitySlider.addEventListener('input', (e) => {
-    const val = parseInt(e.target.value, 10);
-    opacityValue.textContent = `${val}%`;
-    setOpacity(val / 100);
-  });
+  const arSupported = await checkARSupport();
+  if (!arSupported) {
+    arError.textContent = 'WebXR AR non supportato su questo dispositivo/browser. Usa Chrome su Android con ARCore.';
+    arError.classList.remove('hidden');
+    btnStartAR.disabled = true;
+    return;
+  }
 
   btnStartAR.addEventListener('click', onStartAR);
-  btnUndoPoint.addEventListener('click', () => undoLastTap());
+  btnUndoPoint.addEventListener('click', () => undoLastPoint());
   btnReset.addEventListener('click', onReset);
   btnExit.addEventListener('click', onExit);
-
-  // Tap on screen during calibration → corner picker
-  document.addEventListener('click', onScreenTap);
+  btnRealign.addEventListener('click', onRealign);
 }
 
 async function onStartAR() {
@@ -48,20 +56,24 @@ async function onStartAR() {
   try {
     document.getElementById('screen-picker').classList.remove('active');
     showOverlay();
-    showCalibratingUI();
+    showPickingUI();
 
-    await startARScene();
+    await startARSession(arOverlay);
 
-    // Initialize markers in the AR context
-    initMarkers(getArContext(), getScene());
+    // Init point picker with two callbacks:
+    // 1. onCornersComplete: called after 4 corner taps (shows "tap center" instruction)
+    // 2. onCenterComplete: called after 5th tap at center
+    initPointPicker(
+      getScene(),
+      pointCounter,
+      btnUndoPoint,
+      onCornersComplete,
+      onCenterComplete
+    );
 
-    // Initialize corner picker
-    initCornerPicker(getCamera(), getScene(), pointCounter, btnUndoPoint, onCornersComplete);
-
-    mode = 'calibrating';
-
-    // Set per-frame callback
-    setOnFrame(onArFrame);
+    setOnSelect(() => {
+      handleSelect(getReferenceSpace());
+    });
   } catch (e) {
     console.error('Failed to start AR:', e);
     arError.textContent = `Errore avvio AR: ${e.message}`;
@@ -71,105 +83,90 @@ async function onStartAR() {
   }
 }
 
-function onArFrame() {
-  // Update marker visibility cache
-  updateMarkers();
+function onCornersComplete(points) {
+  // Store corners, wait for center tap
+  cornerPoints = points;
+}
 
-  // Show how many markers are currently visible
-  if (markersStatus) {
-    const visible = getVisibleMarkers();
-    markersStatus.textContent = `Marker visibili: ${visible.length} (${visible.map(m => m.id).join(', ') || 'nessuno'})`;
-  }
+function onCenterComplete(centerPoint, centerQuat) {
+  hideReticle();
+  setOnSelect(null);
 
-  // In tracing mode, update the overlay corners from the canvas map
-  if (mode === 'tracing' && overlayMesh) {
-    const corners = getCurrentCorners();
-    if (corners) {
-      updateOverlayCorners(corners);
-      overlayMesh.visible = true;
+  // Capture the hit test result at the center point
+  const hitResult = getLastHitResult();
+
+  // Create the anchor in the next render frame
+  setOnFrame(async (timestamp, frame) => {
+    const texture = getTexture();
+    const success = await anchorOverlay(
+      hitResult,
+      frame,
+      cornerPoints,
+      centerPoint,
+      centerQuat,
+      getReferenceSpace(),
+      texture
+    );
+
+    setOnFrame(null);
+
+    if (success) {
+      showTracingUI();
     } else {
-      overlayMesh.visible = false;
+      console.error('Failed to create anchor overlay');
+      onReset();
     }
-  }
-}
-
-function onScreenTap(event) {
-  if (mode !== 'calibrating') return;
-
-  // Ignore taps on UI elements
-  if (event.target.closest('.btn') || event.target.closest('input') || event.target.closest('label')) {
-    return;
-  }
-
-  // Convert screen coordinates to NDC (-1 to 1)
-  const x = (event.clientX / window.innerWidth) * 2 - 1;
-  const y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-  handleTap(x, y);
-}
-
-function onCornersComplete(corners) {
-  // Build the canvas map from these 4 world points + currently visible markers
-  const success = calibrateCanvas(corners);
-
-  if (!success) {
-    alert('Errore di calibrazione: nessun marker visibile. Riprova.');
-    return;
-  }
-
-  // Clear the visual marker spheres (we don't need them anymore)
-  clearVisuals();
-
-  // Create the overlay mesh and add it to the scene
-  const texture = getTexture();
-  overlayMesh = createOverlayMesh(texture);
-  getScene().add(overlayMesh);
-
-  // Switch to tracing mode
-  mode = 'tracing';
-  showTracingUI();
+  });
 }
 
 function onReset() {
-  resetCornerPicker();
-  resetCalibration();
+  cornerPoints = null;
+  resetPoints();
+  resetAnchor();
+  showPickingUI();
 
-  if (overlayMesh) {
-    getScene().remove(overlayMesh);
-    disposeOverlay();
-    overlayMesh = null;
+  initPointPicker(
+    getScene(),
+    pointCounter,
+    btnUndoPoint,
+    onCornersComplete,
+    onCenterComplete
+  );
+  setOnSelect(() => {
+    handleSelect(getReferenceSpace());
+  });
+}
+
+function onRealign() {
+  // Release the current anchor but keep the existing overlay mesh visible
+  // so the user can see where it was before tapping new corners.
+  cornerPoints = null;
+  resetPoints();
+  releaseAnchorKeepMesh();
+  showPickingUI();
+
+  // Update the picking instructions to reflect the realign context
+  const instructionsEl = document.getElementById('picking-instructions');
+  if (instructionsEl) {
+    instructionsEl.textContent = 'Riallineamento: tocca i 4 angoli + il centro';
   }
 
-  mode = 'calibrating';
-  showCalibratingUI();
+  initPointPicker(
+    getScene(),
+    pointCounter,
+    btnUndoPoint,
+    onCornersComplete,
+    onCenterComplete
+  );
+  setOnSelect(() => {
+    handleSelect(getReferenceSpace());
+  });
 }
 
-function onExit() {
-  resetCornerPicker();
-  resetCalibration();
-  disposeOverlay();
-  disposeMarkers();
-  stopARScene();
-  overlayMesh = null;
-  mode = 'idle';
-
+async function onExit() {
+  await endSession();
   hideOverlay();
   document.getElementById('screen-picker').classList.add('active');
-}
-
-function showOverlay() {
-  document.getElementById('ar-overlay').classList.remove('hidden');
-}
-function hideOverlay() {
-  document.getElementById('ar-overlay').classList.add('hidden');
-}
-function showCalibratingUI() {
-  document.getElementById('ar-picking-ui').classList.remove('hidden');
-  document.getElementById('ar-tracing-ui').classList.add('hidden');
-}
-function showTracingUI() {
-  document.getElementById('ar-picking-ui').classList.add('hidden');
-  document.getElementById('ar-tracing-ui').classList.remove('hidden');
 }
 
 init();

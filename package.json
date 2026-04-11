@@ -8,7 +8,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ar-js-org/ar.js": "^3.4.8",
     "three": "^0.175.0"
   },
   "devDependencies": {
