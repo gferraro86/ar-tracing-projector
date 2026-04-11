@@ -14,21 +14,33 @@ export function initAnchorManager(sceneRef) {
 
 /**
  * Create an anchor at the center point (from hit test) and attach the overlay mesh.
- * The center is where the user tapped (5th tap), and the anchor is created from
- * the hit test result at that exact spot — attached to real surface features.
+ *
+ * Critical: project all 4 corner points onto the surface plane defined by the
+ * center hit pose. The plane is Y=0 in the anchor's local coordinate system
+ * (Y is the surface normal in WebXR hit poses). This guarantees all 4 corners
+ * are perfectly coplanar — no jitter from depth differences between hit tests.
  *
  * hitTestResult: XRHitTestResult from the center tap
  * frame: XRFrame
  * cornerPoints: array of 4 THREE.Vector3 (world-space corner positions)
- * centerPoint: THREE.Vector3 (world-space center position from 5th tap)
+ * centerPoint: THREE.Vector3 (world-space center position)
+ * centerQuat: THREE.Quaternion (orientation of the surface at center)
  * referenceSpace: XRReferenceSpace
  * texture: THREE.Texture
  */
-export async function anchorOverlay(hitTestResult, frame, cornerPoints, centerPoint, referenceSpace, texture) {
-  // Convert corner points to center-relative local coordinates
-  const localPoints = cornerPoints.map(p => p.clone().sub(centerPoint));
+export async function anchorOverlay(hitTestResult, frame, cornerPoints, centerPoint, centerQuat, referenceSpace, texture) {
+  // Inverse rotation to transform world-space points into anchor-local space
+  const invQuat = centerQuat.clone().invert();
 
-  // Create overlay mesh with corners relative to anchor origin
+  // For each corner: transform to anchor-local space, then flatten Y to 0
+  // (Y is the surface normal in hit test poses, so Y=0 = on the plane)
+  const localPoints = cornerPoints.map(p => {
+    const local = p.clone().sub(centerPoint).applyQuaternion(invQuat);
+    local.y = 0; // project onto the surface plane
+    return local;
+  });
+
+  // Create overlay mesh with corners on the local Y=0 plane
   const mesh = createOverlayMesh(texture, localPoints);
   if (!mesh) return false;
 

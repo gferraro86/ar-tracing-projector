@@ -50,9 +50,15 @@ export function handleSelect(referenceSpace) {
   );
 
   if (waitingForCenter) {
-    // 5th tap: center point for anchor
+    // 5th tap: center point for anchor — capture position AND orientation
+    const quat = new THREE.Quaternion(
+      pose.transform.orientation.x,
+      pose.transform.orientation.y,
+      pose.transform.orientation.z,
+      pose.transform.orientation.w
+    );
     addMarker(pos, 4);
-    if (onCenterComplete) onCenterComplete(pos);
+    if (onCenterComplete) onCenterComplete(pos, quat);
     return;
   }
 

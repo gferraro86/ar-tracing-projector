@@ -86,7 +86,7 @@ function onCornersComplete(points) {
   cornerPoints = points;
 }
 
-function onCenterComplete(centerPoint) {
+function onCenterComplete(centerPoint, centerQuat) {
   hideReticle();
   setOnSelect(null);
 
@@ -101,6 +101,7 @@ function onCenterComplete(centerPoint) {
       frame,
       cornerPoints,
       centerPoint,
+      centerQuat,
       getReferenceSpace(),
       texture
     );
